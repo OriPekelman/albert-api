@@ -153,6 +153,7 @@ class Databases(ConfigBaseModel):
 class Auth(ConfigBaseModel):
     master_key: str = "changeme"
     limiting_strategy: LimitingStrategy = LimitingStrategy.FIXED_WINDOW
+    max_token_expiration_days: Optional[int] = Field(default=None, ge=0)
 
 
 class General(ConfigBaseModel):
