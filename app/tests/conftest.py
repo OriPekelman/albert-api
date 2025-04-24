@@ -7,7 +7,7 @@ from typing import Generator
 
 from fastapi.testclient import TestClient
 import pytest
-from qdrant_client import QdrantClient
+import meilisearch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy_utils import create_database, database_exists
@@ -69,10 +69,22 @@ def engine(worker_id):
     Base.metadata.drop_all(engine)  # Clean state
     Base.metadata.create_all(engine)
 
-    qdrant_client = QdrantClient(**settings.databases.qdrant.args)
-    collections = qdrant_client.get_collections().collections
-    for collection in collections:
-        qdrant_client.delete_collection(collection_name=collection.name)
+    # Cleanup Meilisearch indexes before tests
+    try:
+        if settings.databases.meilisearch and settings.databases.meilisearch.args:
+            logging.info("Cleaning up Meilisearch indexes...")
+            ms_args = settings.databases.meilisearch.args.copy()
+            ms_client = meilisearch.Client(ms_args.get('url'), ms_args.get('api_key'))
+            indexes = ms_client.get_indexes()
+            for index in indexes.results:
+                logging.debug(f"Deleting Meilisearch index: {index.uid}")
+                ms_client.delete_index(index.uid)
+            logging.info("Meilisearch cleanup finished.")
+        else:
+            logging.warning("Meilisearch not configured in settings, skipping cleanup.")
+    except Exception as e:
+        logging.error(f"Error during Meilisearch cleanup: {e}")
+        # Depending on policy, might want to raise error here to stop tests
 
     yield engine
 

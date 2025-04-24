@@ -4,7 +4,6 @@ from typing import List, Optional
 from uuid import uuid4
 
 from fastapi import UploadFile
-from qdrant_client import AsyncQdrantClient
 from sqlalchemy import Integer, cast, delete, distinct, func, insert, or_, select, update
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +30,7 @@ from app.utils.exceptions import (
     WebSearchNotAvailableException,
 )
 from app.utils.logging import logger
-from app.utils.variables import ENDPOINT__CHAT_COMPLETIONS, ENDPOINT__EMBEDDINGS
+from app.utils.variables import ENDPOINT__CHAT_COMPLETIONS
 
 from ._modelrouter import ModelRouter
 from ._websearchmanager import WebSearchManager
@@ -47,13 +46,13 @@ class DocumentManager:
 
     def __init__(
         self,
-        qdrant: AsyncQdrantClient,
-        qdrant_model: ModelRouter,
+        search_client,
+        search_model: Optional[ModelRouter] = None,  # Made optional since we don't need it for embeddings
         web_search: Optional[WebSearchManager] = None,
         web_search_model: Optional[ModelRouter] = None,
     ) -> None:
-        self.qdrant = qdrant
-        self.qdrant_model = qdrant_model
+        self.search_client = search_client
+        self.search_model = search_model
         self.web_search = web_search
         self.web_search_model = web_search_model
 
@@ -66,7 +65,7 @@ class DocumentManager:
         collection_id = result.scalar_one()
         await session.commit()
 
-        await self.qdrant.create_collection(collection_id=collection_id, vector_size=self.qdrant_model._vector_size)
+        await self.search_client.create_collection(collection_id=collection_id, vector_size=self.search_model._vector_size)
 
         return collection_id
 
@@ -85,7 +84,7 @@ class DocumentManager:
         await session.commit()
 
         # delete the collection from vector store
-        await self.qdrant.delete_collection(collection_id=collection_id)
+        await self.search_client.delete_collection(collection_id=collection_id)
 
     async def update_collection(self, session: AsyncSession, user_id: int, collection_id: int, name: Optional[str] = None, visibility: Optional[CollectionVisibility] = None, description: Optional[str] = None) -> None:  # fmt: off
         # check if collection exists
@@ -179,14 +178,13 @@ class DocumentManager:
         document_id = result.scalar_one()
         await session.commit()
 
-        client = self.qdrant_model.get_client(endpoint=ENDPOINT__EMBEDDINGS)
         for i, chunk in enumerate(chunks):
             chunk.metadata["collection_id"] = collection.id
             chunk.metadata["document_id"] = document_id
             chunk.metadata["document_name"] = document_name
             chunk.metadata["document_created_at"] = round(time.time())
         try:
-            await self._upsert(chunks=chunks, collection_id=collection_id, model_client=client)
+            await self._upsert(chunks=chunks, collection_id=collection_id)
         except Exception as e:
             logger.error(msg=f"Error during document creation: {e}")
             logger.debug(msg=traceback.format_exc())
@@ -221,7 +219,7 @@ class DocumentManager:
 
         # chunks count
         for document in documents:
-            document.chunks = await self.qdrant.get_chunk_count(collection_id=document.collection_id, document_id=document.id)
+            document.chunks = await self.search_client.get_chunk_count(collection_id=document.collection_id, document_id=document.id)
 
         return documents
 
@@ -242,7 +240,7 @@ class DocumentManager:
         await session.commit()
 
         # delete the document from vector store
-        await self.qdrant.delete_document(collection_id=document.collection_id, document_id=document_id)
+        await self.search_client.delete_document(collection_id=document.collection_id, document_id=document_id)
 
     async def get_chunks(
         self,
@@ -265,7 +263,7 @@ class DocumentManager:
         except NoResultFound:
             raise DocumentNotFoundException()
 
-        chunks = await self.qdrant.get_chunks(
+        chunks = await self.search_client.get_chunks(
             collection_id=document.collection_id,
             document_id=document_id,
             offset=offset,
@@ -283,7 +281,6 @@ class DocumentManager:
         prompt: str,
         method: str,
         k: int,
-        rff_k: int,
         score_threshold: float = 0.0,
         web_search: bool = False,
     ) -> List[Search]:
@@ -292,7 +289,6 @@ class DocumentManager:
             raise WebSearchNotAvailableException()
 
         web_collection_id = None
-        qdrant_client = self.qdrant_model.get_client(endpoint=ENDPOINT__EMBEDDINGS)
         if web_search:
             client = self.web_search_model.get_client(endpoint=ENDPOINT__CHAT_COMPLETIONS)
             web_query = await self.web_search.get_web_query(prompt=prompt, model_client=client)
@@ -317,12 +313,10 @@ class DocumentManager:
 
         searches = await self._query(
             session=session,
-            model_client=qdrant_client,
             prompt=prompt,
             collection_ids=collection_ids,
             method=method,
             k=k,
-            rff_k=rff_k,
             score_threshold=score_threshold,
         )
 
@@ -360,34 +354,22 @@ class DocumentManager:
 
         return chunks
 
-    async def _create_embeddings(self, input: List[str], model_client: ModelClient) -> list[float] | list[list[float]] | dict:
-        response = await model_client.embeddings.create(input=input, model=model_client.model, encoding_format="float")
-
-        return [vector.embedding for vector in response.data]
-
-    async def _upsert(self, chunks: List[Chunk], collection_id: int, model_client: ModelClient) -> None:
+    async def _upsert(self, chunks: List[Chunk], collection_id: int) -> None:
         for i in range(0, len(chunks), self.BATCH_SIZE):
             batch = chunks[i : i + self.BATCH_SIZE]
-            # create embeddings
-            texts = [chunk.content for chunk in batch]
-            embeddings = await self._create_embeddings(input=texts, model_client=model_client)
-
-            # insert chunks and vectors
-            await self.qdrant.upsert(
+            # Insert chunks directly into MeiliSearch
+            await self.search_client.upsert(
                 collection_id=collection_id,
-                chunks=batch,
-                embeddings=embeddings,
+                chunks=batch
             )
 
     async def _query(
         self,
         session: AsyncSession,
-        model_client: ModelClient,
         prompt: str,
         collection_ids: List[int],
         method: SearchMethod,
         k: Optional[int] = 4,
-        rff_k: Optional[int] = 20,
         score_threshold: Optional[float] = None,
     ) -> List[Search]:
         # check if collections exist
@@ -398,16 +380,14 @@ class DocumentManager:
             except NoResultFound:
                 raise CollectionNotFoundException(detail=f"Collection {collection_id} not found.")
 
-        response = await self._create_embeddings(input=[prompt], model_client=model_client)
-        query_vector = response[0]
+        # Ensure score_threshold is a float and not None
+        score_threshold = float(score_threshold) if score_threshold is not None else 0.0
 
-        searches = await self.qdrant.search(
+        searches = await self.search_client.search(
             method=method,
             collection_ids=collection_ids,
             query_prompt=prompt,
-            query_vector=query_vector,
             k=k,
-            rff_k=rff_k,
             score_threshold=score_threshold,
         )
 

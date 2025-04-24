@@ -14,6 +14,7 @@ dependencies = [
     "asyncpg==0.30.0",
     "sqlalchemy[asyncio]==2.0.38",
     "sqlalchemy-utils==0.41.2",
+    "meilisearch>=0.34.1",
 ]
 
 [project.optional-dependencies]
@@ -29,9 +30,7 @@ app = [
     "coredis==4.20.0",
 
     # data
-    "elasticsearch==8.17.1",
     "langchain==0.2.15",
-    "qdrant-client==1.10.1",
     "redis==5.2.1",
     "six==1.17.0",
     "pdfminer.six==20240706",

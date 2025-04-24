@@ -12,7 +12,7 @@ services:
       - ALBERT_API_KEY=${ALBERT_API_KEY}
       - POSTGRES_HOST=postgres
       - REDIS_HOST=redis
-      - QDRANT_HOST=qdrant
+      - MEILISEARCH_HOST=meilisearch
     ports:
       - 8000:8000
     volumes:
@@ -22,7 +22,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-      qdrant:
+      meilisearch:
         condition: service_healthy
 
   postgres:
@@ -35,12 +35,17 @@ services:
       file: ../compose.yml
       service: redis
 
-  qdrant:
-    extends:
-      file: ../compose.yml
-      service: qdrant
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    environment:
+      - MEILI_MASTER_KEY=test
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres:
   redis:
-  qdrant:
+  meilisearch:

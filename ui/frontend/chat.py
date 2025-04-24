@@ -37,9 +37,10 @@ with st.sidebar:
     params["sampling_params"]["model"] = st.selectbox(label="Language model", options=models)
     params["sampling_params"]["temperature"] = st.slider(label="Temperature", value=0.2, min_value=0.0, max_value=1.0, step=0.1)
 
-    max_tokens_active = st.toggle(label="Max tokens", value=None)
+    max_tokens_active = st.toggle(label="Max tokens", value=False)
     max_tokens = st.number_input(label="Max tokens", value=100, min_value=0, step=100, disabled=not max_tokens_active)
-    params["sampling_params"]["max_tokens"] = max_tokens if max_tokens_active else None
+    if max_tokens_active:
+        params["sampling_params"]["max_completion_tokens"] = max_tokens
 
     st.subheader(body="RAG parameters")
     if collections:

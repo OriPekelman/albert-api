@@ -2,7 +2,7 @@
 
 L'API Albert propose d'interagir avec une base de données vectorielle (*vector store*) pour permettre de réaliser du [RAG](https://en.wikipedia.org/wiki/Retrieval-augmented_generation). L'API propose de nourrir ce vector store en important des fichiers qui seront automatiquement traités et insérés dans le *vector store*.
 
-Les collections sont les espaces de stockage dans ce *vector store*. Elles sont utilisées pour organiser les fichiers qui sont importés par l'API. Ces fichiers sont convertis en documents, contenant le texte extrait. Ces documents sont alors découpés en chunks et convertis en vecteurs à l'aide d'un modèle d'embeddings. Ces vecteurs ainsi que le texte qui a été vectorisé sont enregistrés dans la base de données vectorielle.
+Les collections sont les espaces de stockage dans ce *vector store*. Elles sont utilisées pour organiser les fichiers qui sont importés par l'API. Ces fichiers sont convertis en documents, contenant le texte extrait. Ces documents sont alors découpés en chunks et convertis en vecteurs à l'aide d'un modèle d'embeddings. Ces vecteurs ainsi que le texte qui a été vectorisé sont enregistrés dans la base de données vectorielle (Meilisearch).
 
 L'intégration se déroule donc en 3 phases :
 - **File** : fichier original (non stocké)
@@ -89,3 +89,40 @@ Pour la stratégie de chunking est configurable en paramètre du endpoint `POST 
 - `LangchainRecursiveCharacterTextSplitter` : voir [la documentation Langchain](https://python.langchain.com/v0.1/docs/modules/data_connection/document_transformers/recursive_text_splitter/) pour plus de détails
 
 Les paramètres du chunker (taille, séparateur, etc.) sont passés en paramètre du endpoint `POST /v1/files` dans le paramètre `chunker_args`, voir [la documentation](https://albert.api.etalab.gouv.fr/documentation#tag/Retrieval-Augmented-Generation/operation/upload_file_v1_files_post).
+
+## Hybrid Search Configuration
+
+Albert uses Meilisearch's hybrid search capabilities to combine traditional keyword-based search with semantic (meaning-based) search. This provides more accurate and contextually relevant results.
+
+### How Hybrid Search Works
+
+The search combines two approaches:
+1. **Keyword Search**: Traditional full-text search looking for exact matches
+2. **Semantic Search**: Uses embeddings to find contextually similar content
+
+The balance between these approaches is controlled by the `semanticRatio` parameter:
+- `0.0`: Only keyword-based results
+- `0.5`: Equal mix of keyword and semantic results (default)
+- `1.0`: Only semantic results
+
+### Using Hybrid Search
+
+When making a search request, you can configure the hybrid search behavior:
+
+```json
+{
+  "q": "your search query",
+  "hybrid": {
+    "embedder": "default-embedder",
+    "semanticRatio": 0.5
+  }
+}
+```
+
+### Document Processing
+
+When documents are added to the system:
+1. The text is extracted from the document
+2. The text is processed using the document template defined in the configuration
+3. The processed text is converted to embeddings using the configured embedder
+4. Both the text and embeddings are stored for searching

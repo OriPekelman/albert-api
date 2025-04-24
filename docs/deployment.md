@@ -199,22 +199,24 @@ Only the root of the URL should be provided, do not include `/v1` in the URL.
 
 | Argument | Required | Description | Type | Values |
 | --- | --- | --- | --- | --- |
-| type | Required | Defines the database type. | str | `redis`, `qdrant`, `sql` (1) |
-| model | Optional | A text-embeddings-inference model ID if required for Qdrant. | str | (2) |
+| type | Required | Defines the database type. | str | `redis`, `sql`, `meilisearch` (1) |
+| model | Optional | A text-embeddings-inference model ID if required for Meilisearch. | str | (2) |
 | args | Required | Database arguments. | dict | (3) |
 
 **Example**
 
 ```yaml
 databases:
-  - type: qdrant
+  - type: meilisearch
     model: my-embeddings-model
     args:
-      url: http://localhost:6333
-      api_key: yU..SB
-      prefer_grpc: True
-      grpc_port: 6334
-      timeout: 10
+      url: http://localhost:7700
+      api_key: masterKey
+      embedder:
+        api_key: ${OPENAI_API_KEY}
+        api_url: https://api.openai.com/v1/embeddings
+        model: text-embedding-3-small
+        dimensions: 1536
 
   - type: redis
     args:
@@ -237,22 +239,22 @@ databases:
 | Type | Required | Usage | Documentation |
 | --- | --- | --- | --- |
 | `redis` | Required | Cache and rate limiting | [Redis](https://redis.io/) |
-| `qdrant` | Required | Vector store | [Qdrant](https://qdrant.tech/) |
 | `sql` | Required | Relational database | [SQLAlchemy](https://www.sqlalchemy.org/) |
+| `meilisearch` | Required | Search engine and vector store | [Meilisearch](https://www.meilisearch.com/) |
 
-**(2) Qdrant Database Model**
+**(2) Meilisearch Database Model**
 
-Qdrant is a vector database that allows you to store and retrieve vectors. The `model` argument is the ID of a text-embeddings-inference model defined in the `models` section. This model is used to embed the queries when performing a similarity search.
+Meilisearch is a search engine that can also function as a vector database. The `model` argument is the ID of a text-embeddings-inference model defined in the `models` section. This model is used to embed the queries when performing a similarity search.
 
 > **❗️Note**<br>
-> If you change the model of a Qdrant database, you need to re-embed the database.
+> If you change the model of a Meilisearch database, you need to re-embed the database.
 
 **(3) Database Client Arguments**
 
 The database arguments are those accepted by the respective Python clients of these databases:
 - [Redis client](https://github.com/redis/redis-py)
-- [Qdrant client](https://github.com/qdrant/qdrant-client)
 - [SQLAlchemy client](https://www.sqlalchemy.org/)
+- [Meilisearch client](https://github.com/meilisearch/meilisearch-python)
 
 #### playground
 
@@ -294,7 +296,7 @@ playground:
 The Albert API allows searching the internet to enrich API responses. For this, it is necessary to configure a search engine API client in the `web_search` section.
 
 Prerequisites:
-- Qdrant database
+- Meilisearch database
 - SQL database
 - A text-generation model
 - A text-embeddings-inference model

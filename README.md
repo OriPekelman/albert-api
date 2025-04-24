@@ -32,7 +32,7 @@ L'API Albert permet d'être un proxy entre des clients API d'IA générative et 
 
 ## ⚙️ Fonctionnalités avancées
 
-- accès à un *vector store* avec [Elasticsearch](https://www.elastic.co/fr/products/elasticsearch) pour la recherche de similarité (lexicale, sémantique ou hybride) ou [Qdrant](https://qdrant.tech/) pour la recherche sémantique uniquement.
+- accès à un *vector store* avec [Meilisearch](https://www.meilisearch.com/) pour la recherche sémantique
 - authentification par clé API
 
 ## 🧩 Tutoriels

@@ -176,7 +176,6 @@ class TestChat:
             "search_args": {
                 "k": 3,
                 "method": "semantic",
-                "rff_k": 1,
             },
         }
         response = client.post_without_permissions(url=f"/v1{ENDPOINT__CHAT_COMPLETIONS}", json=params)
@@ -196,7 +195,6 @@ class TestChat:
                 "collections": [COLLECTION_ID],
                 "k": 3,
                 "method": "semantic",
-                "rff_k": 1,
                 "template": "Ne réponds pas à la question {prompt} à l'aide des documents ci-dessous : {chunks}",
             },
         }

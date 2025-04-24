@@ -26,9 +26,9 @@ async def search(request: Request, body: SearchRequest, session: AsyncSession = 
         prompt=body.prompt,
         method=body.method,
         k=body.k,
-        rff_k=body.rff_k,
         user_id=request.app.state.user.id,
         web_search=body.web_search,
+        score_threshold=body.score_threshold,
     )
 
     return Searches(data=data)

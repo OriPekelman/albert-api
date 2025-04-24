@@ -9,14 +9,13 @@ from app.utils.exceptions import WrongSearchMethodException, CollectionNotFoundE
 
 
 class SearchMethod(str, Enum):
-    HYBRID = "hybrid"
-    LEXICAL = "lexical"
     SEMANTIC = "semantic"
+    LEXICAL = "lexical"
+    HYBRID = "hybrid"
 
 
 class SearchArgs(BaseModel):
     collections: List[Any] = Field(default=[], description="List of collections ID")
-    rff_k: int = Field(default=20, description="k constant in RFF algorithm")
     k: int = Field(gt=0, default=4, description="Number of results to return")
     method: SearchMethod = Field(default=SearchMethod.SEMANTIC)
     score_threshold: Optional[float] = Field(default=0.0, ge=0.0, le=1.0, description="Score of cosine similarity threshold for filtering results, only available for semantic search method.")  # fmt: off

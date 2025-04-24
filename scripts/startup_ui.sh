@@ -5,6 +5,9 @@ set -e
 MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-20}
 STREAMLIT_CMD_ARGS=${STREAMLIT_CMD_ARGS:-""}  # ex: --server.baseUrlPath=/playground
 
+# Create playground database if it doesn't exist
+PGPASSWORD=changeme psql -h postgres -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'playground'" | grep -q 1 || PGPASSWORD=changeme psql -h postgres -U postgres -c "CREATE DATABASE playground"
+
 # Run database migrations
 python -m alembic -c ui/alembic.ini upgrade head
 

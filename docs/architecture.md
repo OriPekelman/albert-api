@@ -22,18 +22,18 @@ flowchart LR
     subgraph **app/clients**
     redisclient[Redis - ConnectionPool]
     sqlclient[SQLAlchemy - AsyncSession]
-    qdrantclient[Qrant - AsyncQdrantClient]
+    meilisearchclient[Meilisearch - AsyncClient]
     internetclient[BraveInternetClient<br>DuckduckgoInternetClient]
     modelclient@{ shape: processes, label: "VllmModelClient<br>TeiModelClient<br>AlbertModelClient<br>OpenaiModelClient" }
     
     lifespan --> redisclient
     lifespan --> sqlclient
-    lifespan --> qdrantclient
+    lifespan --> meilisearchclient
     lifespan -- one of two--> internetclient
     lifespan -- for each model --> modelclient
 
     style redisclient stroke-dasharray: 5 5
-    style qdrantclient stroke-dasharray: 5 5
+    style meilisearchclient stroke-dasharray: 5 5
     end
     
     subgraph **app/helpers**
@@ -50,7 +50,7 @@ flowchart LR
     internetclient --> websearchmanager
     websearchmanager --> documentmanager
     sqlclient --> documentmanager
-    qdrantclient --> documentmanager
+    meilisearchclient --> documentmanager
     redisclient --> limiter
 
     style documentmanager fill:blue,stroke:#000,stroke-width:1px,color:#fff

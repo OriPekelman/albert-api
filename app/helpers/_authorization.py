@@ -206,7 +206,8 @@ class Authorization:
     async def _check_files_post(self, user: User, role: Role, limits: Dict[str, UserModelLimits], request: Request) -> None:
         from app.utils.lifespan import context
 
-        await self._check_limits(user=user, limits=limits, model=context.documents.qdrant_model)
+        # Use the model configured for search functionality
+        await self._check_limits(user=user, limits=limits, model=context.documents.search_model)
 
     async def _check_ocr_post(self, user: User, role: Role, limits: Dict[str, UserModelLimits], request: Request) -> None:
         form = await request.form()

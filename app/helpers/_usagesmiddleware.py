@@ -35,10 +35,11 @@ class UsagesMiddleware(BaseHTTPMiddleware):
 
     async def _extract_model_from_json(self, body: bytes) -> Optional[str]:
         try:
+            logger.debug(f"Attempting to parse JSON body: {body.decode('utf-8')}")
             json_body = json.loads(body.decode("utf-8"))
             return json_body.get("model")
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            logger.warning("Failed to parse JSON request body")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.warning(f"Failed to parse JSON request body: {str(e)}\nBody content: {body}")
             return None
 
     async def _handle_streaming_response(self, response: Response) -> tuple[dict, Response]:
@@ -48,10 +49,26 @@ class UsagesMiddleware(BaseHTTPMiddleware):
             async for chunk in response.body_iterator:
                 chunks.append(chunk)
                 try:
-                    chunk_data = json.loads(chunk)
-                    if "usage" in chunk_data:
-                        usage_data = chunk_data["usage"]
-                except json.JSONDecodeError:
+                    # Handle SSE format by stripping 'data: ' prefix
+                    if isinstance(chunk, bytes):
+                        chunk = chunk.decode('utf-8')
+                    if not chunk.strip():  # Skip empty chunks
+                        continue
+                    if chunk.startswith('data: '):
+                        chunk = chunk[6:]  # Remove 'data: ' prefix
+                    if chunk.strip() == '[DONE]':
+                        continue
+                    try:
+                        # Only try to parse if it looks like JSON
+                        if chunk.strip().startswith('{'):
+                            chunk_data = json.loads(chunk)
+                            if "usage" in chunk_data:
+                                usage_data = chunk_data["usage"]
+                    except json.JSONDecodeError:
+                        logger.debug(f"Non-JSON chunk received: {chunk}")
+                        continue
+                except (UnicodeDecodeError, AttributeError) as e:
+                    logger.debug(f"Error processing chunk: {str(e)}")
                     continue
 
             async def new_body_iterator():
@@ -69,23 +86,43 @@ class UsagesMiddleware(BaseHTTPMiddleware):
 
         method = request.method
         content_type = request.headers.get("Content-Type", "")
-        body = await request.body()
+        logger.debug(f"Request endpoint: {endpoint}")
+        logger.debug(f"Request method: {method}")
+        logger.debug(f"Content-Type: {content_type}")
 
         # Extract model from request
         model = None
-        if content_type.startswith("multipart/form-data"):
-            model = await self._extract_model_from_multipart(body, content_type)
-        else:
-            model = await self._extract_model_from_json(body)
+        try:
+            # Try to get the body
+            body = await request.body()
+            logger.debug(f"Raw request body: {body}")
+            body_content = body.decode("utf-8") if body else ""
+            logger.debug(f"Decoded request body: {body_content}")
 
-        # Preserve original request body
-        original_receive = request._receive
+            if content_type.startswith("multipart/form-data"):
+                model = await self._extract_model_from_multipart(body, content_type)
+            else:
+                try:
+                    # Try to parse as JSON first
+                    json_body = json.loads(body_content)
+                    logger.debug(f"Parsed JSON body: {json_body}")
+                    model = json_body.get("model")
+                except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                    # If JSON parsing fails, try to extract model from query params
+                    logger.warning(f"Failed to parse JSON request body: {str(e)}\nBody content: {body_content}")
+                    model = request.query_params.get("model")
 
-        async def receive():
-            original = await original_receive()
-            return {**original, "body": body}
+            # Preserve original request body
+            original_receive = request._receive
 
-        request._receive = receive
+            async def receive():
+                original = await original_receive()
+                return {**original, "body": body}
+
+            request._receive = receive
+        except Exception as e:
+            logger.debug(f"Error handling request body: {str(e)}")
+            return await call_next(request)
 
         start_time = datetime.now()
         # Get response

@@ -3,7 +3,7 @@ import logging
 import os
 import re
 from types import SimpleNamespace
-from typing import Any, List, Literal, Optional
+from typing import Any, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -16,9 +16,9 @@ from app.utils.variables import DEFAULT_APP_NAME, DEFAULT_TIMEOUT, ROUTERS
 
 
 class DatabaseType(str, Enum):
-    QDRANT = "qdrant"
     REDIS = "redis"
     SQL = "sql"
+    MEILISEARCH = "meilisearch"
 
 
 class WebSearchType(str, Enum):
@@ -78,25 +78,74 @@ class WebSearch(ConfigBaseModel):
     args: dict = {}
 
 
-class DatabaseQdrant(ConfigBaseModel):
-    model: str
+class DatabaseRedis(ConfigBaseModel):
     args: dict = {}
+
+
+class DatabaseSQL(ConfigBaseModel):
+    args: dict = {}
+
+
+class DatabaseMeilisearch(ConfigBaseModel):
+    class EmbedderConfig(ConfigBaseModel):
+        source: str = "openAi"
+        model: str = "text-embedding-3-small"
+        api_key: Optional[str] = None
+        api_url: Optional[str] = None
+
+    args: dict = {}
+    embedder: Optional[EmbedderConfig] = None
+
+    @model_validator(mode="after")
+    def validate_database(cls, values):
+        if values.type == DatabaseType.MEILISEARCH:
+            # Ensure embedder configuration is valid
+            if values.embedder:
+                if values.embedder.source not in ["openAi", "rest"]:
+                    raise ValueError(f"Invalid embedder source: {values.embedder.source}. Must be 'openAi' or 'rest'")
+                
+                if values.embedder.source == "rest" and not values.embedder.api_url:
+                    raise ValueError("api_url is required for REST embedders")
+                
+                if not values.embedder.model:
+                    raise ValueError("model is required for embedders")
+        return values
 
 
 class Database(ConfigBaseModel):
     type: DatabaseType
-    model: Optional[str] = None
     args: dict = {}
 
     @model_validator(mode="after")
-    def qdrant(cls, values):
-        # Qdrant does not support grpc for create index payload
-        if values.type == DatabaseType.QDRANT:
-            if values.args.get("prefer_grpc"):
-                logging.warning("Qdrant does not support grpc for create index payload, force REST connection.")
-            values.args["prefer_grpc"] = False
+    def validate_database(cls, values):
+        if values.type == DatabaseType.MEILISEARCH:
+            # No special validation needed for MeiliSearch
+            pass
+        return values
 
-            assert values.model, "A text embeddings inference model ID is required for Qdrant database."
+
+class Databases(ConfigBaseModel):
+    type: DatabaseType
+    args: dict = {}
+    redis: Optional[DatabaseRedis] = None
+    sql: Optional[DatabaseSQL] = None
+    meilisearch: Optional[DatabaseMeilisearch] = None
+
+    @model_validator(mode="after")
+    def validate_databases(cls, values):
+        config = values.model_dump()
+
+        # Set database instances
+        values.redis = next((database for database in config.databases if database.type == DatabaseType.REDIS), None)
+        values.sql = next((database for database in config.databases if database.type == DatabaseType.SQL), None)
+        values.meilisearch = next((database for database in config.databases if database.type == DatabaseType.MEILISEARCH), None)
+
+        # Check required databases
+        if values.type == DatabaseType.MEILISEARCH:
+            assert values.sql, "SQL database is required to use MeiliSearch features."
+
+        if values.web_search:
+            assert values.meilisearch, "MeiliSearch database is required to use web_search."
 
         return values
 
@@ -202,16 +251,12 @@ class Settings(BaseSettings):
         values.databases = SimpleNamespace()
         values.databases.sql = next((database for database in config.databases if database.type == DatabaseType.SQL), None)
         values.databases.redis = next((database for database in config.databases if database.type == DatabaseType.REDIS), None)
-        values.databases.qdrant = next((database for database in config.databases if database.type == DatabaseType.QDRANT), None)
+        values.databases.meilisearch = next((database for database in config.databases if database.type == DatabaseType.MEILISEARCH), None)
 
         assert values.databases.sql.args["url"].startswith("postgresql+asyncpg://") or values.databases.sql.args["url"].startswith("sqlite+aiosqlite://"), "SQL connection must be async."  # fmt: off
 
-        if values.databases.qdrant:
-            assert values.databases.sql, "SQL database is required to use Qdrant features."
-            assert values.databases.qdrant.model in [model.id for model in values.models if model.type == ModelType.TEXT_EMBEDDINGS_INFERENCE], f"Qdrant model is not defined in models section with type {ModelType.TEXT_EMBEDDINGS_INFERENCE}."  # fmt: off
-
         if values.web_search:
-            assert values.databases.qdrant, "Qdrant database is required to use web_search."
+            assert values.databases.meilisearch, "MeiliSearch database is required to use web_search."
             assert values.web_search.model in [model.id for model in values.models if model.type == ModelType.TEXT_GENERATION], f"Web search model is not defined in models section with type {ModelType.TEXT_GENERATION}."  # fmt: off
 
         return values

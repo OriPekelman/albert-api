@@ -1,3 +1,3 @@
-from ._qdrantclient import QdrantClient
+from ._meilisearchclient import MeilisearchClient
 
-__all__ = ["QdrantClient"]
+__all__ = ["MeilisearchClient"]

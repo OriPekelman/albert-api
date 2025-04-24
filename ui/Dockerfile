@@ -33,6 +33,7 @@ RUN groupadd --gid 1100 albert && \
 # Only runtime dependencies
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/startup_ui.sh /startup.sh

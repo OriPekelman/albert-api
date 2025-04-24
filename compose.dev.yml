@@ -6,11 +6,14 @@ services:
       dockerfile: app/Dockerfile
     platform: linux/amd64
     restart: always
+    env_file:
+      - .env
     environment:
       - COVERAGE_RCFILE=./app/.coveragerc
       - POSTGRES_HOST=postgres
       - REDIS_HOST=redis
-      - QDRANT_HOST=qdrant
+      - MEILISEARCH_HOST=meilisearch
+      - API_HOST=api
       - OPENAI_API_KEY=${OPENAI_API_KEY} # replace with your own key
     ports:
       - 8000:8000
@@ -26,7 +29,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-      qdrant:
+      meilisearch:
         condition: service_healthy
 
   playground:
@@ -35,11 +38,15 @@ services:
       dockerfile: ui/Dockerfile
     platform: linux/amd64
     restart: always
+    env_file:
+      - .env
     ports:
       - 8501:8501
     environment:
       - API_HOST=api
       - POSTGRES_HOST=postgres
+      - MEILISEARCH_HOST=meilisearch
+      - REDIS_HOST=redis
     volumes:
       - ./config.yml:/config.yml:ro
     develop:
@@ -49,6 +56,8 @@ services:
           target: /app
     depends_on:
       postgres:
+        condition: service_healthy
+      meilisearch:
         condition: service_healthy
 
   postgres:
@@ -61,12 +70,12 @@ services:
       file: compose.yml
       service: redis
 
-  qdrant:
+  meilisearch:
     extends:
       file: compose.yml
-      service: qdrant
+      service: meilisearch
 
 volumes:
   postgres:
   redis:
-  qdrant:
+  meilisearch:

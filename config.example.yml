@@ -12,12 +12,18 @@ auth:
   master_key: changeme
 
 databases:
-  - type: qdrant
+  - type: meilisearch
     model: my-embeddings-model
     args:
-      url: http://${QDRANT_HOST}
+      url: http://${MEILISEARCH_HOST}:7700
       api_key: changeme
-      timeout: 10
+      embedder:
+        model: text-embedding-3-small
+        type: openai
+        args:
+          api_url: https://api.openai.com
+          api_key: ${OPENAI_API_KEY}
+          timeout: 60
 
   - type: redis
     args:

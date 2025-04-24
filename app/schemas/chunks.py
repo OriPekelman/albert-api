@@ -1,12 +1,13 @@
 from typing import Any, Dict, List, Literal
+from pydantic import Field
 
 from app.schemas import BaseModel
 
 
 class Chunk(BaseModel):
     object: Literal["chunk"] = "chunk"
-    id: int
-    metadata: Dict[str, Any]
+    id: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     content: str
 
 
