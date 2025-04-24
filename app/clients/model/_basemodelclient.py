@@ -58,8 +58,7 @@ class BaseModelClient(ABC):
         Returns:
             tuple: The formatted request composed of the url, headers, json, files and data.
         """
-        # self.endpoint is set by the ModelRouter
-        url = urljoin(base=self.api_url, url=self.ENDPOINT_TABLE[self.endpoint])
+        url = urljoin(base=self.api_url, url=self.ENDPOINT_TABLE[endpoint])
         headers = {"Authorization": f"Bearer {self.api_key}"}
         if json and "model" in json:
             json["model"] = self.model
