@@ -1,16 +1,18 @@
+import asyncio
 from datetime import datetime
-import json
-import traceback
-from typing import Callable, Optional, AsyncGenerator
+from typing import AsyncGenerator, Callable
 
 from fastapi import Request, Response
+from fastapi.routing import APIRoute
+from starlette.routing import Match
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.sql.models import Usage
 from app.sql.session import get_db
-from app.utils import variables
 from app.utils.logging import logger
+from app.utils.usage_decorator import NoUserIdException, StreamingRequestException, extract_usage_from_request, extract_usage_from_response
 
 
 class UsagesMiddleware(BaseHTTPMiddleware):
@@ -79,9 +81,10 @@ class UsagesMiddleware(BaseHTTPMiddleware):
         return usage_data, response
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # Skip if middleware is disabled via environment variable
-        endpoint = request.url.path
-        if not any(endpoint.endswith(model_endpoint) for model_endpoint in self.MODELS_ENDPOINTS):
+        route = self.get_route(request)
+
+        if route and getattr(route.endpoint, "is_log_usage_decorated", False):
+            logger.debug("Endpoint is decorated with log_usage, skipping middleware logging.")
             return await call_next(request)
 
         method = request.method
@@ -125,39 +128,25 @@ class UsagesMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         start_time = datetime.now()
-        # Get response
-        response = await call_next(request)
-        duration = int((datetime.now() - start_time).total_seconds() * 1000)
-        if not model:
-            return response
-
-        if not hasattr(request.app.state, "user") or request.app.state.user.id == 0:  # master key
-            return response
-
+        usage = Usage(datetime=start_time, endpoint="N/A")
         try:
-            usage_data, response = await self._handle_streaming_response(response)
-            # Log usage
-            async for session in self.db_func():
-                log = Usage(
-                    datetime=start_time,
-                    duration=duration,
-                    user_id=request.app.state.user.id,
-                    token_id=request.app.state.token_id,
-                    endpoint=endpoint,
-                    model=model,
-                    prompt_tokens=usage_data.get("prompt_tokens"),
-                    completion_tokens=usage_data.get("completion_tokens"),
-                    total_tokens=usage_data.get("total_tokens"),
-                    status=response.status_code,
-                    method=method,
-                )
-                session.add(log)
-                await session.commit()
-        except Exception as e:
-            logger.debug(traceback.format_exc())
-            logger.error(f"Failed to log usage: {str(e)}")
-            await session.rollback()
-        finally:
-            await session.close()
+            await extract_usage_from_request(usage, request)
+        except NoUserIdException:
+            logger.info("No user ID found in request, skipping usage logging.")
+            return await call_next(request)
+        except StreamingRequestException:
+            logger.debug("Streaming request, should be handled by decorator.")
+            return await call_next(request)
 
+        response = await call_next(request)
+        asyncio.create_task(extract_usage_from_response(response, start_time, usage))
         return response
+
+    def get_route(self, request):
+        route = None
+        for r in request.app.router.routes:
+            match, _ = r.matches(request.scope)
+            if match == Match.FULL and isinstance(r, APIRoute):
+                route = r
+                break
+        return route
