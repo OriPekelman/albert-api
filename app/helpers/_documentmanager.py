@@ -17,7 +17,7 @@ from app.schemas.collections import Collection, CollectionVisibility
 from app.schemas.core.data import ParserOutput
 from app.schemas.documents import Document
 from app.schemas.files import ChunkerName
-from app.schemas.search import Search, SearchMethod
+from app.schemas.search import Search
 from app.sql.models import Collection as CollectionTable
 from app.sql.models import Document as DocumentTable
 from app.sql.models import User as UserTable
@@ -318,7 +318,8 @@ class DocumentManager:
             session=session,
             prompt=prompt,
             collection_ids=collection_ids,
-            method=method,
+            query_prompt=prompt,
+            query_vector=query_vector,
             k=k,
             score_threshold=score_threshold,
         )
