@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 import traceback
 from types import SimpleNamespace
 
@@ -9,17 +10,12 @@ from app.clients.database import MeilisearchClient
 from app.clients.model import BaseModelClient as ModelClient
 from app.clients.web_search import BaseWebSearchClient as WebSearchClient
 from app.helpers import DocumentManager, IdentityAccessManager, Limiter, ModelRegistry, ModelRouter, WebSearchManager
-from app.utils.logging import logger
 from app.utils.settings import settings
 from app.utils.exceptions import ModelNotFoundException
 from app.schemas.models import ModelType
 
-context = SimpleNamespace(
-    models=None,
-    iam=None,
-    limiter=None,
-    documents=None,
-)
+logger = logging.getLogger(__name__)
+context = SimpleNamespace(models=None, iam=None, limiter=None, documents=None)
 
 
 @asynccontextmanager

@@ -2,7 +2,7 @@
 
 ### Run services
 
-1. Create a configuration file (see the following [configuration section](./deployment.md#configuration)) `config.yml` on the root of the project.
+1. Create a configuration file (see the following [configuration section](./deployment.md#configuration)) `config.yml` on the root of the project. A example configuration file is available [here](../config.example.yml).
 
 2. Deploy the services with the following command:
 
@@ -26,9 +26,10 @@ Connect to the playground UI (http://localhost:8501) with the master username as
 
 ### Configuration
 
-To function, the Albert API requires configuring the configuration file (config.yml). This defines third-party clients and configuration parameters.
+The Albert API requires configuring a configuration file (config.yml). This defines third-party clients and configuration parameters.
+**The configuration file is a YAML file that can combine the configuration of the playground and the API.**
 
-You can consult the Pydantic schema of the configuration [here](../app/schemas/settings.py).
+You can consult the Pydantic schema of the configuration for the API [here](../app/schemas/core/settings.py) and for the playground [here](../ui/settings.py).
 
 #### Secrets
 
@@ -111,15 +112,15 @@ auth:
 | Argument | Required | Description | Type | Values | Default |
 | --- | --- | --- | --- | --- | --- |
 | id | Required | Model ID displayed by the API. | str | | | 
-| type | Required | Model type. | str | (1) |
+| type | Required | Model type. | str | (1) | |
 | aliases | Optional | Model aliases. | list[str] |  | `[]` | 
 | owned_by | Optional | Model owner displayed by the `/v1/models` endpoint. | str | | `"Albert API"` |
 | routing_strategy | Optional | Model routing strategy | str | (2) | `"shuffle"` |
 | clients | Required | Defines the third-party clients required for the model. | list[dict] | |
-| clients.model | Required | Third-party model ID. | str | (3) |
-| clients.type | Required | Third-party client type. | str | (4) |
+| clients.model | Required | Third-party model ID. | str | (3) | |
+| clients.type | Required | Third-party client type. | str | (4) | |
 | clients.args | Required | Third-party client arguments. | dict | |
-| clients.args.api_url | Required | Third-party client API URL. | str | (5) |
+| clients.args.api_url | Required | Third-party client API URL. | str | (5) | |
 | clients.args.api_key | Required | Third-party client API key. | str | |
 | clients.args.timeout | Optional | Timeout (in seconds) for the request to the third-party client | int | | `300` |
 
@@ -225,14 +226,24 @@ databases:
       port: 6379
       password: changeme
   
-  - type: sql
+  - type: sql # API database (async)
+    context: api
     args:
-      url: postgresql://postgres:changeme@localhost:5432/api
+      url: postgresql+asyncpg://postgres:changeme@localhost:5432/api
       echo: False
       pool_size: 5
       max_overflow: 10
       pool_pre_ping: True
       connect_args: {"server_settings": {"statement_timeout": "120s"}}
+
+  - type: sql # Playground database (sync)
+    context: playground
+    args:
+      url: postgresql://postgres:changeme@localhost:5432/playground
+      echo: False
+      pool_size: 5
+      max_overflow: 10
+      pool_pre_ping: True
 ```   
 
 **(1) Database Types**
@@ -250,7 +261,7 @@ Meilisearch is a search engine that can also function as a vector database. The 
 > **❗️Note**<br>
 > If you change the model of a Meilisearch database, you need to re-embed the database.
 
-**(3) Database Client Arguments**
+**(4) Database Client Arguments**
 
 The database arguments are those accepted by the respective Python clients of these databases:
 - [Redis client](https://github.com/redis/redis-py)
@@ -272,7 +283,6 @@ The `playground` section allows you to configure the playground.
 | menu_items.report_a_bug | Optional | The URL this menu item should point to. If None, hides this menu item. The URL may also refer to an email address e.g. `mailto:john@example.com.` | str | | `None` |
 | menu_items.about | Optional | A markdown string to show in the About dialog. If None, only shows Streamlit's default About text. | str | | `None` |
 | cache_ttl | Required | Cache TTL (in seconds). | int | | `1800` |
-| database_url | Required | Database URL. | str | | |
 
 **Example**
 
@@ -287,7 +297,6 @@ playground:
     report_a_bug: https://github.com/etalab-ia/albert-api/issues
     about: "This is a playground for the Albert API."
   cache_ttl: 1800
-  database_url: postgresql://postgres:changeme@localhost:5432/ui
 ```
 
 #### web_search

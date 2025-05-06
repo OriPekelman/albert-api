@@ -1,3 +1,4 @@
+import logging
 import time
 import traceback
 from typing import List, Optional
@@ -34,6 +35,8 @@ from app.utils.variables import ENDPOINT__CHAT_COMPLETIONS
 
 from ._modelrouter import ModelRouter
 from ._websearchmanager import WebSearchManager
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentManager:

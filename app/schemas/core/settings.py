@@ -138,6 +138,9 @@ class Databases(ConfigBaseModel):
         if values.web_search:
             assert values.meilisearch, "MeiliSearch database is required to use web_search."
 
+        if values.type == DatabaseType.SQL:
+            values.args = DatabaseSQLArgs(**values.args).model_dump()
+
         return values
 
 
@@ -189,8 +192,22 @@ class Config(ConfigBaseModel):
 
     @model_validator(mode="after")
     def validate_databases(cls, values) -> Any:
-        cache_databases = [database for database in values.databases if database.type == DatabaseType.REDIS]
-        assert len(cache_databases) == 1, "There must be only one cache database."
+        redis_databases = [database for database in values.databases if database.type == DatabaseType.REDIS]
+        assert len(redis_databases) <= 1, "There must be only one redis database."
+
+        qdrant_databases = [database for database in values.databases if database.type == DatabaseType.QDRANT]
+        assert len(qdrant_databases) <= 1, "There must be only one Qdrant database."
+
+        sql_databases = [database for database in values.databases if database.type == DatabaseType.SQL and database.context == "api"]
+        if len(sql_databases) > 1:
+            raise ValueError("There must be only one SQL database with the `api` context. If your configuration files contains multiple SQL databases, please specify the context keyword for other SQL databases.")  # fmt: off
+        if len(sql_databases) == 0:
+            raise ValueError("There must be at least one SQL database.")
+
+        values.databases = SimpleNamespace()
+        values.databases.redis = redis_databases[0]
+        values.databases.qdrant = qdrant_databases[0]
+        values.databases.sql = sql_databases[0]
 
         return values
 
